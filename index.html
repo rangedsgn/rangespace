@@ -1,0 +1,1481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rangespace v1.0 — Range Design</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0D1B2A;--surface:#0f2236;--panel:#122640;--panel2:#16304e;
+  --border:#1e3d5c;--border2:#245070;
+  --accent:#1A73E8;--adim:rgba(26,115,232,.12);
+  --accent2:#2BC48A;--a2dim:rgba(43,196,.12);
+  --a2dim:rgba(43,196,138,.12);
+  --text:#E6E9EC;--text2:#8aa4be;--muted:#4a6880;
+  --ok:#2BC48A;--err:#e85d5d;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;overflow:hidden}
+#app{display:grid;grid-template-columns:var(--sw,290px) 1fr;grid-template-rows:50px 1fr;height:100vh;transition:grid-template-columns .25s cubic-bezier(.4,0,.2,1)}
+#app.off{--sw:0px}
+#app.off aside{transform:translateX(-100%);pointer-events:none}
+
+/* ── HEADER ───────────────────────────────────────────── */
+header{grid-column:1/-1;display:flex;align-items:center;padding:0 14px;gap:10px;border-bottom:1px solid var(--border);background:var(--surface)}
+.sb-btn{width:30px;height:30px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.sb-btn:hover{border-color:var(--accent);color:var(--accent)}
+.h-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.app-title{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;letter-spacing:-.4px;flex-shrink:0}
+.app-title span{color:var(--accent)}
+.app-ver{font-size:9px;color:var(--muted);letter-spacing:.3px;padding:2px 6px;border:1px solid var(--border2);border-radius:10px;flex-shrink:0}
+header .spc{flex:1}
+.h-tagline{font-size:10px;color:var(--text2);line-height:1.45;max-width:440px;text-align:right;opacity:.75;flex-shrink:0}
+
+/* ── SIDEBAR ──────────────────────────────────────────── */
+aside{background:var(--surface);border-right:1px solid var(--border);overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;transition:transform .25s cubic-bezier(.4,0,.2,1)}
+aside::-webkit-scrollbar{width:3px}
+aside::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sec{padding:12px 14px;border-bottom:1px solid var(--border)}
+.sec-title{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+
+/* dims */
+.dim-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.dim-item{display:flex;flex-direction:column;gap:3px}
+.dim-lbl{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px}
+.inp{background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;padding:6px;border-radius:5px;width:100%;text-align:center;outline:none;transition:border-color .15s}
+.inp:focus{border-color:var(--accent)}
+
+/* scene */
+.scene-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:9px}
+.scene-row:last-child{margin-bottom:0}
+.scene-lbl{font-size:10px;color:var(--text2)}
+.pill{display:flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;border:1px solid var(--border2);background:var(--panel2);cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);transition:all .15s;user-select:none}
+.pill.on{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+.pill-dot{width:5px;height:5px;border-radius:50%;background:var(--muted);transition:background .15s;flex-shrink:0}
+.pill.on .pill-dot{background:var(--accent)}
+
+/* brightness slider */
+.slid-wrap{position:relative;margin:5px 0 3px}
+.slid-track{width:100%;height:8px;border-radius:4px;border:1px solid var(--border2);background:linear-gradient(to right,#000,#fff);cursor:pointer;display:block}
+input[type=range].slid-inp{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;margin:0}
+.slid-thumb{position:absolute;top:50%;width:14px;height:14px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);box-shadow:0 0 0 1px rgba(26,115,232,.4);transform:translate(-50%,-50%);pointer-events:none}
+.slid-lbls{display:flex;justify-content:space-between;font-size:8px;color:var(--muted);margin-top:2px}
+
+/* bg color */
+.bg-row{display:flex;align-items:center;gap:6px;margin-top:9px}
+.swatch{width:24px;height:24px;border-radius:5px;flex-shrink:0;border:1.5px solid var(--border2);position:relative;overflow:hidden;cursor:pointer}
+.swatch input[type=color]{position:absolute;inset:-5px;opacity:0;cursor:pointer;width:calc(100%+10px);height:calc(100%+10px)}
+.hex-fld{flex:1;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:10px;padding:5px 7px;border-radius:5px;outline:none;letter-spacing:.5px;text-transform:uppercase;transition:border-color .15s}
+.hex-fld:focus{border-color:var(--accent)}
+
+/* camera presets */
+.cam-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
+.cam-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 2px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);cursor:pointer;font-family:'DM Mono',monospace;font-size:8px;transition:all .15s}
+.cam-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+.cam-btn.active{border-color:var(--accent2);color:var(--accent2);background:var(--a2dim)}
+.cam-icon{font-size:14px;line-height:1}
+
+/* rotate */
+.rot-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.rot-ttl{font-family:'Syne',sans-serif;font-size:9px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:var(--muted)}
+.rot-tog{display:flex;align-items:center;gap:5px;padding:4px 9px;border-radius:6px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;user-select:none}
+.rot-tog.on{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+.rot-ico{font-size:12px}
+.rot-tog.on .rot-ico{display:inline-block;animation:spin-slow 2s linear infinite}
+@keyframes spin-slow{to{transform:rotate(360deg)}}
+.rot-row{display:flex;align-items:center;gap:5px;margin-top:6px}
+.dir-btn{width:30px;height:30px;border-radius:6px;flex-shrink:0;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.dir-btn.on{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+.spd-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;flex:1}
+.spd-btn{padding:5px 0;border-radius:5px;border:1px solid var(--border2);background:var(--panel2);color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;text-align:center;transition:all .15s}
+.spd-btn.on{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+
+/* ── SURFACES ─────────────────────────────────────────── */
+.wall-list{display:flex;flex-direction:column;gap:6px}
+.wall-item{border:1px solid var(--border);border-radius:7px;overflow:hidden;transition:border-color .15s}
+.wall-item:hover{border-color:var(--border2)}
+.wall-item.hw{opacity:.35}
+.wall-item.hw .wall-name{text-decoration:line-through;color:var(--muted)}
+.wall-hdr{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--panel2);cursor:pointer;user-select:none}
+.wcb{width:16px;height:16px;border-radius:3px;border:1px solid rgba(255,255,255,.15);cursor:pointer;flex-shrink:0;padding:0;position:relative;overflow:hidden;outline:none;transition:border-color .15s;display:block}
+.wcb:hover{border-color:var(--accent)}
+.wcb input[type=color]{position:absolute;inset:-5px;opacity:0;cursor:pointer;width:calc(100%+10px);height:calc(100%+10px)}
+.wall-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);flex-shrink:0;transition:background .2s}
+.wall-dot.ok{background:var(--ok)}
+.wall-name{font-size:10px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wall-st{font-size:8px;color:var(--muted);white-space:nowrap;max-width:60px;overflow:hidden;text-overflow:ellipsis}
+.vis-tog{position:relative;width:26px;height:14px;flex-shrink:0}
+.vis-tog input{opacity:0;width:0;height:0;position:absolute}
+.vis-sl{position:absolute;inset:0;background:var(--border2);border-radius:14px;cursor:pointer;transition:background .2s}
+.vis-sl::before{content:'';position:absolute;width:8px;height:8px;left:3px;top:3px;background:var(--muted);border-radius:50%;transition:transform .2s,background .2s}
+.vis-tog input:checked+.vis-sl{background:var(--adim)}
+.vis-tog input:checked+.vis-sl::before{transform:translateX(12px);background:var(--accent)}
+.wall-body{display:none;padding:9px;background:var(--bg)}
+.wall-item.open .wall-body{display:block}
+.hex-row{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.hex-sw{width:22px;height:22px;border-radius:4px;flex-shrink:0;border:1px solid var(--border2);position:relative;overflow:hidden;cursor:pointer}
+.hex-sw input[type=color]{position:absolute;inset:-5px;opacity:0;cursor:pointer;width:calc(100%+10px);height:calc(100%+10px)}
+.hex-inp{flex:1;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:10px;padding:4px 7px;border-radius:4px;outline:none;letter-spacing:.5px;text-transform:uppercase;transition:border-color .15s}
+.hex-inp:focus{border-color:var(--accent)}
+/* set-btn removed — hex field applies on Enter/blur */
+
+/* save/import button styles */
+.save-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:0}
+.save-btn{display:flex;align-items:center;justify-content:center;gap:5px;padding:8px 4px;border-radius:7px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);cursor:pointer;font-family:'DM Mono',monospace;font-size:10px;transition:all .15s}
+.save-btn:hover{border-color:var(--accent2);color:var(--accent2);background:var(--a2dim)}
+.save-btn .si{font-size:14px}
+/* upload zone — plain div, not label, to avoid nesting issues */
+.up-zone{border:1.5px dashed var(--border2);border-radius:5px;padding:12px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.up-zone:hover,.up-zone.drag{border-color:var(--accent);background:var(--adim)}
+.up-zone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.up-ico{font-size:18px;margin-bottom:2px;pointer-events:none}
+.up-txt{font-size:9px;color:var(--muted);line-height:1.5;pointer-events:none}
+.thumb{width:100%;height:52px;object-fit:cover;border-radius:4px;display:none;margin-bottom:6px}
+.thumb.on{display:block}
+.clr-btn{width:100%;padding:4px;background:transparent;border:1px solid var(--border2);color:var(--muted);border-radius:4px;font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;transition:all .15s;margin-top:5px}
+.clr-btn:hover{border-color:var(--err);color:var(--err)}
+
+/* ── TABLE CARDS ──────────────────────────────────────── */
+.add-tbl-btn{width:100%;padding:9px;background:var(--accent2);color:#fff;border:none;border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;font-weight:500;cursor:pointer;transition:opacity .15s,transform .1s}
+.add-tbl-btn:hover{opacity:.88}
+.add-tbl-btn:active{transform:scale(.98)}
+.tbl-cards{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+
+.tbl-card{border:1px solid var(--border2);border-radius:8px;overflow:hidden}
+.tbl-card-hdr{display:flex;align-items:center;gap:7px;padding:7px 10px;background:var(--panel2);cursor:pointer;user-select:none}
+.tbl-card-sw{width:12px;height:12px;border-radius:2px;flex-shrink:0}
+.tbl-card-name{font-size:10px;color:var(--text);flex:1;font-weight:500}
+/* visibility mini-toggle inside card header */
+.tbl-vis{position:relative;width:26px;height:14px;flex-shrink:0}
+.tbl-vis input{opacity:0;width:0;height:0;position:absolute}
+.tbl-vis-sl{position:absolute;inset:0;background:var(--border2);border-radius:14px;cursor:pointer;transition:background .2s}
+.tbl-vis-sl::before{content:'';position:absolute;width:8px;height:8px;left:3px;top:3px;background:var(--muted);border-radius:50%;transition:transform .2s,background .2s}
+.tbl-vis input:checked+.tbl-vis-sl{background:var(--a2dim)}
+.tbl-vis input:checked+.tbl-vis-sl::before{transform:translateX(12px);background:var(--accent2)}
+.tbl-del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0;line-height:1;transition:color .15s;margin-left:2px}
+.tbl-del:hover{color:var(--err)}
+
+.tbl-card-body{padding:10px;background:var(--bg);border-top:1px solid var(--border)}
+/* small hex row for table */
+.t-hex-row{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.t-sw{width:22px;height:22px;border-radius:4px;flex-shrink:0;border:1px solid var(--border2);position:relative;overflow:hidden;cursor:pointer}
+.t-sw input[type=color]{position:absolute;inset:-5px;opacity:0;cursor:pointer;width:calc(100%+10px);height:calc(100%+10px)}
+.t-hex{flex:1;background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:10px;padding:4px 7px;border-radius:4px;outline:none;letter-spacing:.5px;text-transform:uppercase;transition:border-color .15s}
+.t-hex:focus{border-color:var(--accent2)}
+/* 2-col dim grid for table */
+.t-dim-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px}
+.t-dim-item{display:flex;flex-direction:column;gap:2px}
+.t-lbl{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
+.t-num{background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:5px 6px;border-radius:4px;text-align:center;outline:none;transition:border-color .15s;width:100%}
+.t-num:focus{border-color:var(--accent2)}
+/* leg style dropdown */
+.t-sel{background:var(--panel2);border:1px solid var(--border2);color:var(--text);font-family:'DM Mono',monospace;font-size:10px;padding:5px 7px;border-radius:5px;width:100%;outline:none;cursor:pointer;transition:border-color .15s;margin-bottom:8px;appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238aa4be'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.t-sel:focus{border-color:var(--accent2)}
+/* table top upload */
+.t-up-zone{border:1.5px dashed var(--border2);border-radius:5px;padding:10px;text-align:center;cursor:pointer;transition:all .15s;position:relative;margin-bottom:8px}
+.t-up-zone:hover,.t-up-zone.drag{border-color:var(--accent2);background:var(--a2dim)}
+.t-up-zone input[type=file]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer}
+.t-thumb{width:100%;height:38px;object-fit:cover;border-radius:3px;display:none;margin-bottom:4px}
+.t-thumb.on{display:block}
+/* move & rotate controls */
+.ctrl-lbl{font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px}
+.move-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;width:96px;margin:0 auto 8px}
+.mv-btn{padding:5px;border-radius:4px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);font-size:11px;cursor:pointer;text-align:center;transition:all .15s}
+.mv-btn:hover{border-color:var(--accent);color:var(--accent)}
+.rot-row2{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.r-btn{padding:5px;border-radius:5px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);font-family:'DM Mono',monospace;font-size:10px;cursor:pointer;text-align:center;transition:all .15s}
+.r-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+
+/* ── EXPORT ───────────────────────────────────────────── */
+.exp-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+.exp-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 4px;border-radius:7px;border:1px solid var(--border2);background:var(--panel2);color:var(--text2);cursor:pointer;transition:all .15s}
+.exp-btn:hover{border-color:var(--accent);background:var(--adim);color:var(--accent)}
+.exp-btn.rec{border-color:var(--err);background:rgba(232,93,93,.08);animation:rpulse 1s ease-in-out infinite}
+@keyframes rpulse{0%,100%{box-shadow:0 0 0 0 rgba(232,93,93,0)}50%{box-shadow:0 0 0 4px rgba(232,93,93,.15)}}
+.ei{font-size:16px;line-height:1}.el{font-size:10px;font-weight:500;color:var(--text);margin-top:1px}.es{font-size:8px;color:var(--muted)}
+
+/* nav */
+.ctrl-leg{display:flex;flex-direction:column;gap:4px}
+.ctrl-r{display:flex;justify-content:space-between;align-items:center}
+.ctrl-k{font-size:9px;background:var(--panel2);border:1px solid var(--border2);padding:2px 6px;border-radius:4px;color:var(--text2)}
+.ctrl-d{font-size:9px;color:var(--muted)}
+
+/* footer */
+.sf-foot{margin-top:auto;padding:10px 14px;border-top:1px solid var(--border);display:flex;align-items:center;gap:7px}
+.sf-mark{width:18px;height:18px;border-radius:3px;background:var(--accent2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sf-mark svg{width:16px;height:16px;display:block}
+.sf-credit{font-size:8px;color:var(--muted);line-height:1.4}
+.sf-credit b{color:var(--accent2);font-weight:500}
+
+/* ── MAIN & HUD ───────────────────────────────────────── */
+main{position:relative;overflow:hidden}
+#canvas3d{display:block;width:100%;height:100%}
+
+/* HUD panel — horizontal row at bottom-right */
+.hud{
+  position:absolute;bottom:16px;right:16px;
+  display:flex;align-items:flex-end;gap:8px;
+}
+/* dim pill */
+.hud-pill{font-size:9px;color:var(--muted);background:rgba(13,27,42,.92);backdrop-filter:blur(10px);padding:5px 10px;border-radius:7px;border:1px solid var(--border2);letter-spacing:.3px;white-space:nowrap}
+/* icon buttons */
+.hud-btn{width:34px;height:34px;border-radius:8px;border:1px solid var(--border2);background:rgba(13,27,42,.92);backdrop-filter:blur(10px);color:var(--text2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0}
+.hud-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--adim)}
+
+/* slider panel — shared container for zoom + rotation */
+.hud-sliders{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(13,27,42,.92);backdrop-filter:blur(10px);
+  border:1px solid var(--border2);border-radius:10px;
+  padding:10px 12px;
+}
+.hud-sl-group{display:flex;flex-direction:column;align-items:center;gap:4px}
+.hud-sl-lbl{font-size:8px;color:var(--muted);letter-spacing:.4px;text-transform:uppercase}
+
+/* vertical zoom slider */
+input[type=range].zoom-sl{
+  -webkit-appearance:none;appearance:none;
+  writing-mode:vertical-lr;direction:rtl;
+  width:14px;height:80px;background:transparent;cursor:pointer;outline:none;
+}
+input[type=range].zoom-sl::-webkit-slider-runnable-track{width:4px;border-radius:2px;background:linear-gradient(to bottom,var(--accent) var(--p,50%),var(--border2) var(--p,50%))}
+input[type=range].zoom-sl::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);box-shadow:0 0 0 1px rgba(26,115,232,.4);margin-left:-4.5px}
+input[type=range].zoom-sl::-moz-range-track{width:4px;border-radius:2px;background:var(--border2)}
+input[type=range].zoom-sl::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);border:2px solid var(--bg)}
+.zoom-sep{display:none}
+
+/* ── EXPORT MODAL ─────────────────────────────────────────── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:100;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:22px;max-width:520px;width:100%;max-height:85vh;display:flex;flex-direction:column;gap:14px}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text)}
+.modal-desc{font-size:10px;color:var(--text2);line-height:1.6}
+.modal-img{width:100%;border-radius:6px;border:1px solid var(--border);max-height:280px;object-fit:contain;background:var(--bg)}
+.modal-dl-link{display:block;text-align:center;padding:10px;border-radius:7px;border:1.5px dashed var(--accent2);color:var(--accent2);font-family:'DM Mono',monospace;font-size:11px;text-decoration:none;transition:background .15s}
+.modal-dl-link:hover{background:var(--a2dim)}
+.modal-actions{display:flex;gap:8px}
+.modal-close{padding:8px 14px;background:transparent;border:1px solid var(--border2);color:var(--text2);border-radius:6px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s}
+.modal-close:hover{border-color:var(--err);color:var(--err)}
+.modal-hint{font-size:9px;color:var(--muted);text-align:center;line-height:1.6}
+/* About modal */
+.about-box{background:var(--surface);border:1px solid var(--border2);border-radius:12px;padding:28px 24px;max-width:360px;width:100%;display:flex;flex-direction:column;gap:16px;text-align:center}
+.about-logo{width:40px;height:40px;border-radius:8px;background:var(--accent2);display:flex;align-items:center;justify-content:center;margin:0 auto;flex-shrink:0}
+.about-logo svg{width:36px;height:36px;display:block}
+.about-title{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:var(--text);letter-spacing:-.3px}
+.about-title span{color:var(--accent)}
+.about-ver{font-size:9px;color:var(--muted);border:1px solid var(--border2);border-radius:10px;padding:2px 8px;display:inline-block;margin-top:-8px}
+.about-body{font-size:11px;color:var(--text2);line-height:1.8}
+.about-body a{color:var(--accent2);text-decoration:none}
+.about-body a:hover{text-decoration:underline}
+.about-divider{height:1px;background:var(--border);margin:0 -4px}
+.about-close{padding:9px;background:var(--panel2);border:1px solid var(--border2);color:var(--text2);border-radius:7px;font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s}
+.about-close:hover{border-color:var(--accent);color:var(--accent)}
+.loading-text{font-family:'Syne',sans-serif;font-size:13px;color:var(--muted);letter-spacing:1px}
+.spinner{width:28px;height:28px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.wm{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);font-size:9px;color:rgba(74,104,128,.5);letter-spacing:.5px;pointer-events:none;user-select:none;white-space:nowrap}
+.wm b{color:rgba(43,196,138,.4);font-weight:500}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<header>
+  <button class="sb-btn" id="sb-btn" title="Toggle sidebar (Tab)">☰</button>
+  <div class="h-sep"></div>
+  <div class="app-title">Range<span>space</span></div>
+  <div class="app-ver">v1.0</div>
+  <div class="spc"></div>
+  <div class="h-tagline">Rangespace is a design tool built for visual thinkers.<br>Control your creative space with ease.</div>
+</header>
+
+<!-- SIDEBAR -->
+<aside id="sidebar">
+
+  <!-- Dimensions — live update, no Apply button -->
+  <div class="sec">
+    <div class="sec-title">Room Dimensions</div>
+    <div class="dim-grid">
+      <div class="dim-item"><div class="dim-lbl">Width</div><input class="inp" id="inp-w" type="number" value="5" min="1" max="20" step="0.5"></div>
+      <div class="dim-item"><div class="dim-lbl">Height</div><input class="inp" id="inp-h" type="number" value="3" min="1" max="20" step="0.5"></div>
+      <div class="dim-item"><div class="dim-lbl">Depth</div><input class="inp" id="inp-d" type="number" value="5" min="1" max="20" step="0.5"></div>
+    </div>
+  </div>
+
+  <!-- Scene -->
+  <div class="sec">
+    <div class="sec-title">Scene</div>
+    <div class="scene-row">
+      <span class="scene-lbl">Floor Grid</span>
+      <div class="pill on" id="grid-pill"><div class="pill-dot"></div><span id="grid-lbl">Visible</span></div>
+    </div>
+    <div class="scene-lbl" style="margin-bottom:5px">Brightness</div>
+    <div class="slid-wrap">
+      <div class="slid-track"></div>
+      <input type="range" class="slid-inp" id="bright-sl" min="0" max="100" value="60">
+      <div class="slid-thumb" id="bright-th" style="left:60%"></div>
+    </div>
+    <div class="slid-lbls"><span>Dark</span><span>Bright</span></div>
+    <div class="bg-row">
+      <div class="swatch" id="bg-sw" style="background:#0D1B2A"><input type="color" id="bg-pk" value="#0D1B2A"></div>
+      <input class="hex-fld" id="bg-hex" type="text" maxlength="7" value="#0D1B2A" placeholder="#RRGGBB">
+    </div>
+  </div>
+
+  <!-- Camera -->
+  <div class="sec">
+    <div class="sec-title">Camera View</div>
+    <div class="cam-grid">
+      <button class="cam-btn" data-cam="front"><span class="cam-icon">⬛</span>Front</button>
+      <button class="cam-btn" data-cam="top"><span class="cam-icon">🔲</span>Top</button>
+      <button class="cam-btn" data-cam="left"><span class="cam-icon">◀</span>Left Q</button>
+      <button class="cam-btn" data-cam="right"><span class="cam-icon">▶</span>Right Q</button>
+    </div>
+  </div>
+
+  <!-- Auto Rotate -->
+  <div class="sec">
+    <div class="rot-hdr">
+      <span class="rot-ttl">Auto Rotate</span>
+      <button class="rot-tog" id="rot-tog"><span class="rot-ico">⟳</span><span id="rot-lbl">Off</span></button>
+    </div>
+    <div class="rot-row">
+      <button class="dir-btn on" id="dir-cw">↻</button>
+      <button class="dir-btn" id="dir-ccw">↺</button>
+      <div class="spd-grid" id="spd-grid">
+        <button class="spd-btn" data-spd="0.1">Slow</button>
+        <button class="spd-btn on" data-spd="0.4">Norm</button>
+        <button class="spd-btn" data-spd="0.9">Fast</button>
+        <button class="spd-btn" data-spd="1.8">Turbo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Surfaces -->
+  <div class="sec">
+    <div class="sec-title">Surfaces</div>
+    <div class="wall-list" id="wall-list"></div>
+  </div>
+
+  <!-- Add Table -->
+  <div class="sec">
+    <div class="sec-title">Add Table</div>
+    <button class="add-tbl-btn" id="add-tbl-btn">+ Add Table</button>
+    <div class="tbl-cards" id="tbl-cards"></div>
+  </div>
+
+  <!-- Export -->
+  <div class="sec">
+    <div class="sec-title">Export</div>
+    <button class="exp-btn" id="exp-jpg" style="width:100%;flex-direction:row;gap:8px;justify-content:center;padding:10px"><span class="ei">🖼</span><span class="el">Save as JPG</span></button>
+    <div style="margin-top:8px;font-size:9px;color:var(--muted);line-height:1.6;text-align:center">MP4 export is not available<br>in the current version.</div>
+  </div>
+
+  <!-- Save / Import -->
+  <div class="sec">
+    <div class="sec-title">Save &amp; Import</div>
+    <div class="save-grid">
+      <button class="save-btn" id="save-btn"><span class="si">💾</span>Save Progress</button>
+      <button class="save-btn" id="import-btn"><span class="si">📂</span>Import Progress</button>
+    </div>
+    <input type="file" id="import-file" accept=".rangespace,.json" style="display:none">
+  </div>
+
+  <!-- Nav -->
+  <div class="sec">
+    <div class="sec-title">Navigation</div>
+    <div class="ctrl-leg">
+      <div class="ctrl-r"><span class="ctrl-k">drag</span><span class="ctrl-d">Orbit camera</span></div>
+      <div class="ctrl-r"><span class="ctrl-k">scroll</span><span class="ctrl-d">Zoom</span></div>
+      <div class="ctrl-r"><span class="ctrl-k">right-drag</span><span class="ctrl-d">Pan view</span></div>
+      <div class="ctrl-r"><span class="ctrl-k">Tab</span><span class="ctrl-d">Toggle sidebar</span></div>
+      <div class="ctrl-r"><span class="ctrl-k">R</span><span class="ctrl-d">Reset camera</span></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="sf-foot">
+    <button id="about-btn" class="sf-mark" title="About Range Design" style="cursor:pointer;border:none;padding:0;background:var(--accent2);border-radius:3px;display:flex;align-items:center;justify-content:center;width:18px;height:18px;flex-shrink:0">
+      <svg viewBox="200 320 820 540" xmlns="http://www.w3.org/2000/svg" style="width:16px;height:16px;display:block">
+        <polygon points="475.3 618.5 293.7 618.5 358.4 393 539.9 393 475.3 618.5" fill="#0D1B2A"/>
+        <polygon points="662.1 429.3 348 429.3 358.4 393 672.5 393 662.1 429.3" fill="#0D1B2A"/>
+        <polygon points="835.9 807 553.8 807 595.5 661.7 877.6 661.7 835.9 807" fill="#0D1B2A"/>
+        <polygon points="799.6 807 870 561.6 906.3 561.6 835.9 807 799.6 807" fill="#0D1B2A"/>
+      </svg>
+    </button>
+    <div class="sf-credit">Rangespace v1.0<br>by <b>Range Design</b> · via Claude</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main>
+  <div class="loading-screen" id="loading"><div class="spinner"></div><div class="loading-text">INITIALIZING RENDERER</div></div>
+  <canvas id="canvas3d"></canvas>
+  <div class="wm">Rangespace v1.0 · by <b>Range Design</b> · via Claude</div>
+
+  <!-- About modal -->
+  <div class="modal-overlay" id="about-modal" style="display:none">
+    <div class="about-box">
+      <div class="about-logo">
+        <svg viewBox="200 320 820 540" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="475.3 618.5 293.7 618.5 358.4 393 539.9 393 475.3 618.5" fill="#0D1B2A"/>
+          <polygon points="662.1 429.3 348 429.3 358.4 393 672.5 393 662.1 429.3" fill="#0D1B2A"/>
+          <polygon points="835.9 807 553.8 807 595.5 661.7 877.6 661.7 835.9 807" fill="#0D1B2A"/>
+          <polygon points="799.6 807 870 561.6 906.3 561.6 835.9 807 799.6 807" fill="#0D1B2A"/>
+        </svg>
+      </div>
+      <div>
+        <div class="about-title">Range<span>space</span></div>
+        <div class="about-ver">v1.0</div>
+      </div>
+      <div class="about-divider"></div>
+      <div class="about-body">
+        This is a casual fun project by <b>Range Design</b>.<br><br>
+        We'd love to hear what you think — send your feedback to<br>
+        <a href="mailto:range.dsgn@gmail.com">range.dsgn@gmail.com</a><br><br>
+        Follow us on Instagram<br>
+        <a href="https://www.instagram.com/range.dsgn" target="_blank">@range.dsgn</a>
+      </div>
+      <div class="about-divider"></div>
+      <button class="about-close" id="about-close-btn">Close</button>
+    </div>
+  </div>
+
+  <!-- Export / Save modal -->
+  <div class="modal-overlay" id="export-modal" style="display:none">
+    <div class="modal-box">
+      <div class="modal-title" id="modal-title">Export</div>
+      <div class="modal-desc" id="modal-desc"></div>
+      <img class="modal-img" id="modal-img" style="display:none"/>
+      <a class="modal-dl-link" id="modal-dl-link" style="display:none" download>⬇ Right-click → Save link as… (Mac: Download Linked File)</a>
+      <div class="modal-actions">
+        <button class="modal-close" id="modal-close-btn">✕ Close</button>
+      </div>
+      <div class="modal-hint" id="modal-hint"></div>
+    </div>
+  </div>
+  <div class="hud">
+    <div class="hud-pill" id="dim-disp">5 × 3 × 5</div>
+    <button class="hud-btn" id="reset-cam" title="Reset Camera (R)">⌖</button>
+    <div class="hud-sliders">
+      <div class="hud-sl-group">
+        <span class="hud-sl-lbl">＋</span>
+        <input type="range" class="zoom-sl" id="zoom-sl" min="2" max="38" value="13" step="0.5">
+        <span class="hud-sl-lbl">－</span>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+//  WALL CONFIG
+// ══════════════════════════════════════════════════════════
+const WALLS = [
+  { id:'floor',   label:'Floor',      emoji:'⬇', dc:'#1A2E40' },
+  { id:'ceiling', label:'Ceiling',    emoji:'⬆', dc:'#122032' },
+  { id:'front',   label:'Front Wall', emoji:'◻', dc:'#16273a' },
+  { id:'back',    label:'Back Wall',  emoji:'◻', dc:'#16273a' },
+  { id:'left',    label:'Left Wall',  emoji:'◁', dc:'#172840' },
+  { id:'right',   label:'Right Wall', emoji:'▷', dc:'#172840' },
+];
+
+// ══════════════════════════════════════════════════════════
+//  STATE
+// ══════════════════════════════════════════════════════════
+const S = {
+  dims: { w:5, h:3, d:5 },
+  textures:{}, colors:{}, enabled:{},
+  insideView:false, autoRotate:false, rotDir:1, rotSpeed:0.4,
+  gridVisible:true, bgColor:'#0D1B2A', brightness:0.6,
+  tables:[], tblCtr:0,
+};
+WALLS.forEach(w => { S.colors[w.id]=w.dc; S.enabled[w.id]=true; });
+
+// ══════════════════════════════════════════════════════════
+//  THREE.JS — exact proven setup from working version
+// ══════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas3d');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, preserveDrawingBuffer:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#0D1B2A');
+scene.fog = new THREE.FogExp2(0x0D1B2A, 0.015);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 200);
+const DC = { x:8, y:6, z:10 };
+camera.position.set(DC.x, DC.y, DC.z);
+camera.lookAt(0,0,0);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.35); scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dirLight.position.set(5,10,5); dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048,2048);
+dirLight.shadow.camera.near=0.5; dirLight.shadow.camera.far=50;
+dirLight.shadow.camera.left = dirLight.shadow.camera.bottom = -15;
+dirLight.shadow.camera.right = dirLight.shadow.camera.top = 15;
+scene.add(dirLight);
+const pointLight = new THREE.PointLight(0x1A73E8, 0.4, 30); scene.add(pointLight);
+
+const gridHelper = new THREE.GridHelper(40, 40, 0x1e3d5c, 0x162d44);
+scene.add(gridHelper);
+
+const roomGroup = new THREE.Group(); scene.add(roomGroup);
+const tableGroup = new THREE.Group(); scene.add(tableGroup);
+const wallMeshes = {};
+
+// ══════════════════════════════════════════════════════════
+//  BUILD ROOM — single mesh per surface (proven working)
+// ══════════════════════════════════════════════════════════
+function buildRoom() {
+  while (roomGroup.children.length) roomGroup.remove(roomGroup.children[0]);
+  Object.keys(wallMeshes).forEach(k => delete wallMeshes[k]);
+
+  const { w, h, d } = S.dims;
+  const hw=w/2, hh=h/2, hd=d/2, t=0.05;
+
+  // Grid sits on the floor surface
+  gridHelper.position.set(0, -hh, 0);
+  gridHelper.visible = S.gridVisible;
+
+  // Wall definitions — box mesh + outer cap plane per wall
+  // Cap offset: 0.03 units outside the box face to avoid z-fighting
+  const EPS = 0.03;
+  const defs = [
+    { id:'floor',
+      geo: new THREE.BoxGeometry(w, t, d),   pos:[0,-hh,0],
+      capGeo: new THREE.PlaneGeometry(w+EPS*2, d+EPS*2),
+      capPos:[0,-hh-t/2-EPS,0], capRot:[-Math.PI/2,0,0] },
+    { id:'ceiling',
+      geo: new THREE.BoxGeometry(w, t, d),   pos:[0,hh,0],
+      capGeo: new THREE.PlaneGeometry(w+EPS*2, d+EPS*2),
+      capPos:[0,hh+t/2+EPS,0],  capRot:[Math.PI/2,0,0] },
+    { id:'front',
+      geo: new THREE.BoxGeometry(w, h, t),   pos:[0,0,hd],
+      capGeo: new THREE.PlaneGeometry(w+EPS*2, h+EPS*2),
+      capPos:[0,0,hd+t/2+EPS],  capRot:[0,0,0] },
+    { id:'back',
+      geo: new THREE.BoxGeometry(w, h, t),   pos:[0,0,-hd],
+      capGeo: new THREE.PlaneGeometry(w+EPS*2, h+EPS*2),
+      capPos:[0,0,-hd-t/2-EPS], capRot:[0,Math.PI,0] },
+    { id:'left',
+      geo: new THREE.BoxGeometry(t, h, d),   pos:[-hw,0,0],
+      capGeo: new THREE.PlaneGeometry(d+EPS*2, h+EPS*2),
+      capPos:[-hw-t/2-EPS,0,0], capRot:[0,-Math.PI/2,0] },
+    { id:'right',
+      geo: new THREE.BoxGeometry(t, h, d),   pos:[hw,0,0],
+      capGeo: new THREE.PlaneGeometry(d+EPS*2, h+EPS*2),
+      capPos:[hw+t/2+EPS,0,0],  capRot:[0,Math.PI/2,0] },
+  ];
+
+  defs.forEach(({ id, geo, pos, capGeo, capPos, capRot }) => {
+    const tex = S.textures[id] || null;
+    const vis = S.enabled[id];
+    const col = S.colors[id];
+
+    // INNER box — DoubleSide with texture (or solid color). Proven working approach.
+    const mat = new THREE.MeshStandardMaterial({
+      color: tex ? 0xffffff : col,
+      map: tex || null,
+      roughness: 0.85, metalness: 0.02,
+      side: THREE.DoubleSide,
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(...pos);
+    mesh.receiveShadow = true;
+    mesh.visible = vis;
+    wallMeshes[id] = mesh;
+    roomGroup.add(mesh);
+
+    // OUTER CAP — always present. A FrontSide plane placed just outside each wall
+    // showing only the solid hex color. This completely covers the outer face of
+    // the DoubleSide box, so texture never bleeds to the outside.
+    const capMat = new THREE.MeshStandardMaterial({
+      color: col,
+      roughness: 0.85, metalness: 0.02,
+      side: THREE.FrontSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    const cap = new THREE.Mesh(capGeo, capMat);
+    cap.position.set(...capPos);
+    cap.rotation.set(...capRot);
+    cap.visible = vis;
+    cap.userData.isOuterCap = true;
+    cap.userData.wallId = id;
+    roomGroup.add(cap);
+  });
+
+  // Edge outline
+  roomGroup.add(new THREE.LineSegments(
+    new THREE.EdgesGeometry(new THREE.BoxGeometry(w, h, d)),
+    new THREE.LineBasicMaterial({ color:0x1A73E8, transparent:true, opacity:0.18 })
+  ));
+
+  pointLight.position.set(0, hh-0.3, 0);
+  document.getElementById('dim-disp').textContent = `${w} × ${h} × ${d}`;
+
+  // Reposition all tables to new floor Y
+  tableGroup.children.forEach(m => { m.position.y = -hh; });
+}
+
+// ══════════════════════════════════════════════════════════
+//  SYNC WALL COLOR
+// ══════════════════════════════════════════════════════════
+function syncColor(id, hex) {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  S.colors[id] = hex;
+  const cp=document.getElementById('cp-'+id), cb=document.getElementById('cb-'+id);
+  const hp=document.getElementById('hp-'+id), hs=document.getElementById('hs-'+id);
+  const hf=document.getElementById('hf-'+id);
+  if(cp) cp.value=hex; if(cb) cb.style.background=hex;
+  if(hp) hp.value=hex; if(hs) hs.style.background=hex;
+  if(hf) hf.value=hex.toUpperCase();
+  // Update main mesh color (only when no texture)
+  if (!S.textures[id]) {
+    const m=wallMeshes[id];
+    if(m) { m.material.color.set(hex); m.material.needsUpdate=true; }
+  }
+  // Update outer cap color (exists only when textured, but safe to iterate always)
+  roomGroup.children.forEach(c => {
+    if(c.userData.isOuterCap && c.userData.wallId===id) {
+      c.material.color.set(hex); c.material.needsUpdate=true;
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  FILE HANDLING — exact proven version (new THREE.Texture(img))
+// ══════════════════════════════════════════════════════════
+function handleFile(file, wallId) {
+  if (!file || !file.type.match(/image\/(png|jpeg)/)) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const tex = new THREE.Texture(img);
+      tex.needsUpdate = true;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      S.textures[wallId] = tex;
+      // Stash data URL for Save Progress
+      if (!S._texDataURLs) S._texDataURLs = {};
+      S._texDataURLs[wallId] = e.target.result;
+      // Rebuild room so cover plate is added for this wall
+      buildRoom();
+      document.getElementById('th-'+wallId).src = e.target.result;
+      document.getElementById('th-'+wallId).classList.add('on');
+      document.getElementById('dot-'+wallId).classList.add('ok');
+      const n = file.name;
+      document.getElementById('st-'+wallId).textContent = n.length>14 ? n.slice(0,13)+'…' : n;
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearTexture(wallId) {
+  S.textures[wallId] = null;
+  if (S._texDataURLs) delete S._texDataURLs[wallId];
+  // Rebuild so cover plate is removed
+  buildRoom();
+  document.getElementById('th-'+wallId).classList.remove('on');
+  document.getElementById('dot-'+wallId).classList.remove('ok');
+  document.getElementById('st-'+wallId).textContent = 'empty';
+}
+
+// ══════════════════════════════════════════════════════════
+//  BUILD WALL UI
+// ══════════════════════════════════════════════════════════
+const wallListEl = document.getElementById('wall-list');
+WALLS.forEach(wall => {
+  const item = document.createElement('div');
+  item.className = 'wall-item';
+  item.innerHTML = `
+    <div class="wall-hdr">
+      <button class="wcb" id="cb-${wall.id}" style="background:${wall.dc}" onclick="event.stopPropagation()">
+        <input type="color" id="cp-${wall.id}" value="${wall.dc}">
+      </button>
+      <div class="wall-dot" id="dot-${wall.id}"></div>
+      <span class="wall-name">${wall.emoji} ${wall.label}</span>
+      <span class="wall-st" id="st-${wall.id}">empty</span>
+      <label class="vis-tog" onclick="event.stopPropagation()">
+        <input type="checkbox" id="vis-${wall.id}" checked>
+        <span class="vis-sl"></span>
+      </label>
+    </div>
+    <div class="wall-body">
+      <img class="thumb" id="th-${wall.id}"/>
+      <div class="hex-row">
+        <div class="hex-sw" id="hs-${wall.id}" style="background:${wall.dc}">
+          <input type="color" id="hp-${wall.id}" value="${wall.dc}">
+        </div>
+        <input class="hex-inp" id="hf-${wall.id}" type="text" maxlength="7" value="${wall.dc.toUpperCase()}" placeholder="#RRGGBB">
+      </div>
+      <div class="up-zone" id="zone-${wall.id}">
+        <input type="file" id="file-${wall.id}" accept="image/png,image/jpeg">
+        <div class="up-ico">🖼</div>
+        <div class="up-txt">Drop JPG/PNG here · overrides color<br>or click to browse</div>
+      </div>
+      <button class="clr-btn" id="cl-${wall.id}">✕ Clear image (restore color)</button>
+    </div>`;
+  wallListEl.appendChild(item);
+
+  item.querySelector('.wall-hdr').addEventListener('click', () => {
+    const o = item.classList.contains('open');
+    document.querySelectorAll('.wall-item').forEach(i => i.classList.remove('open'));
+    if (!o) item.classList.add('open');
+  });
+
+  document.getElementById('cp-'+wall.id).addEventListener('input', e => syncColor(wall.id, e.target.value));
+
+  const hp=document.getElementById('hp-'+wall.id), hf=document.getElementById('hf-'+wall.id);
+  hp.addEventListener('input', e => { hf.value=e.target.value.toUpperCase(); syncColor(wall.id, e.target.value); });
+
+  function applyHex() {
+    let h=hf.value.trim(); if(!h.startsWith('#')) h='#'+h;
+    if(/^#[0-9a-fA-F]{6}$/.test(h)) syncColor(wall.id,h);
+    else { hf.style.borderColor='var(--err)'; setTimeout(()=>hf.style.borderColor='',700); }
+  }
+  hf.addEventListener('blur', applyHex);
+  hf.addEventListener('keydown', e => { if(e.key==='Enter') applyHex(); });
+
+  // File input via direct click — avoids label nesting issues
+  const fileInp = document.getElementById('file-'+wall.id);
+  fileInp.addEventListener('change', e => handleFile(e.target.files[0], wall.id));
+
+  const zone = document.getElementById('zone-'+wall.id);
+  zone.addEventListener('click', e => { if(e.target !== fileInp) fileInp.click(); });
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    if(e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], wall.id);
+  });
+
+  document.getElementById('cl-'+wall.id).addEventListener('click', () => clearTexture(wall.id));
+
+  document.getElementById('vis-'+wall.id).addEventListener('change', function() {
+    S.enabled[wall.id] = this.checked;
+    item.classList.toggle('hw', !this.checked);
+    const m=wallMeshes[wall.id]; if(m) m.visible=this.checked;
+    roomGroup.children.forEach(c => {
+      if(c.userData.isOuterCap && c.userData.wallId===wall.id) c.visible=this.checked;
+    });
+  });
+});
+
+// ══════════════════════════════════════════════════════════
+//  LIVE DIM UPDATE — debounced, no Apply button
+// ══════════════════════════════════════════════════════════
+let dimTimer = null;
+function schedDim() {
+  clearTimeout(dimTimer);
+  dimTimer = setTimeout(() => {
+    S.dims.w = Math.max(0.5, Math.min(20, parseFloat(document.getElementById('inp-w').value)||5));
+    S.dims.h = Math.max(0.5, Math.min(20, parseFloat(document.getElementById('inp-h').value)||3));
+    S.dims.d = Math.max(0.5, Math.min(20, parseFloat(document.getElementById('inp-d').value)||5));
+    buildRoom();
+  }, 400);
+}
+['inp-w','inp-h','inp-d'].forEach(id => {
+  document.getElementById(id).addEventListener('input', schedDim);
+  document.getElementById(id).addEventListener('change', schedDim);
+});
+
+// ══════════════════════════════════════════════════════════
+//  TABLE BUILDER — per-card approach
+// ══════════════════════════════════════════════════════════
+const tblCardsEl = document.getElementById('tbl-cards');
+
+function buildTblMesh(cfg) {
+  const { w, d, h, thick, color, legs, tex } = cfg;
+  const grp = new THREE.Group();
+  const legH = Math.max(0.01, h - thick);
+  const legMat = new THREE.MeshStandardMaterial({ color, roughness:0.7, metalness:0.05 });
+
+  if (legs === 'round') {
+    // Round table: circular top + single cylinder pedestal
+    const topR = Math.max(w, d) / 2;
+    const topMat = new THREE.MeshStandardMaterial({
+      color: tex ? 0xffffff : color, map: tex || null, roughness:0.6, metalness:0.05
+    });
+    const topM = new THREE.Mesh(new THREE.CylinderGeometry(topR, topR, thick, 32), topMat);
+    topM.position.set(0, legH + thick/2, 0);
+    topM.receiveShadow = true; topM.castShadow = true;
+    grp.add(topM);
+    const pedR = Math.max(0.06, topR * 0.12);
+    const ped = new THREE.Mesh(new THREE.CylinderGeometry(pedR, pedR * 1.4, legH, 16), legMat);
+    ped.position.set(0, legH/2, 0); ped.castShadow = true;
+    grp.add(ped);
+
+  } else if (legs === 'cube') {
+    // Cube: one solid block the full height — no top protrusion
+    const topMat = new THREE.MeshStandardMaterial({
+      color: tex ? 0xffffff : color, map: tex || null, roughness:0.6, metalness:0.05
+    });
+    const block = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), topMat);
+    block.position.set(0, h/2, 0);
+    block.receiveShadow = true; block.castShadow = true;
+    grp.add(block);
+
+  } else {
+    // 4legs: rectangular top + four cylinder legs
+    const topMat = new THREE.MeshStandardMaterial({
+      color: tex ? 0xffffff : color, map: tex || null, roughness:0.6, metalness:0.05
+    });
+    const topM = new THREE.Mesh(new THREE.BoxGeometry(w, thick, d), topMat);
+    topM.position.set(0, legH + thick/2, 0);
+    topM.receiveShadow = true; topM.castShadow = true;
+    grp.add(topM);
+    const lr=0.04, ox=w/2*0.85, oz=d/2*0.85;
+    const lg = new THREE.CylinderGeometry(lr, lr, legH, 8);
+    [[ox,oz],[ox,-oz],[-ox,oz],[-ox,-oz]].forEach(([lx,lz]) => {
+      const lm = new THREE.Mesh(lg, legMat);
+      lm.position.set(lx, legH/2, lz); lm.castShadow=true; grp.add(lm);
+    });
+  }
+
+  grp.position.y = -S.dims.h/2;
+  return grp;
+}
+
+function refreshTblMesh(entry) {
+  // Remove old mesh and rebuild in-place
+  const oldPos = entry.mesh ? entry.mesh.position.clone() : null;
+  const oldRotY = entry.mesh ? entry.mesh.rotation.y : 0;
+  if (entry.mesh) tableGroup.remove(entry.mesh);
+  entry.mesh = buildTblMesh(entry.cfg);
+  if (oldPos) {
+    entry.mesh.position.x = oldPos.x;
+    entry.mesh.position.z = oldPos.z;
+  }
+  entry.mesh.rotation.y = oldRotY;
+  entry.mesh.visible = entry.visible;
+  tableGroup.add(entry.mesh);
+}
+
+document.getElementById('add-tbl-btn').addEventListener('click', () => {
+  const id = ++S.tblCtr;
+  const defColor = '#8B5E3C';
+  const entry = {
+    id, visible: true, mesh: null,
+    cfg: { w:2, d:1, h:0.75, thick:0.08, color:defColor, legs:'4legs', tex:null },
+  };
+  refreshTblMesh(entry);
+  S.tables.push(entry);
+  createTblCard(entry);
+});
+
+function createTblCard(entry) {
+  const { id, cfg } = entry;
+  const card = document.createElement('div');
+  card.className = 'tbl-card';
+  card.id = 'tcard-'+id;
+  card.innerHTML = `
+    <div class="tbl-card-hdr">
+      <div class="tbl-card-sw" id="tcardSw-${id}" style="background:${cfg.color}"></div>
+      <span class="tbl-card-name">Table ${id}</span>
+      <label class="tbl-vis" onclick="event.stopPropagation()">
+        <input type="checkbox" id="tvis-${id}" checked>
+        <span class="tbl-vis-sl"></span>
+      </label>
+      <button class="tbl-del" id="tdel-${id}" onclick="event.stopPropagation()">✕</button>
+    </div>
+    <div class="tbl-card-body">
+      <!-- Color -->
+      <div class="t-hex-row">
+        <div class="t-sw" id="tsw-${id}" style="background:${cfg.color}">
+          <input type="color" id="tcol-${id}" value="${cfg.color}">
+        </div>
+        <input class="t-hex" id="thex-${id}" type="text" maxlength="7" value="${cfg.color.toUpperCase()}" placeholder="#RRGGBB">
+      </div>
+      <!-- Dimensions -->
+      <div class="t-dim-grid">
+        <div class="t-dim-item"><div class="t-lbl">Width</div><input class="t-num" id="tw-${id}" type="number" value="2" min="0.5" max="8" step="0.1"></div>
+        <div class="t-dim-item"><div class="t-lbl">Depth</div><input class="t-num" id="td-${id}" type="number" value="1" min="0.5" max="8" step="0.1"></div>
+        <div class="t-dim-item"><div class="t-lbl">Height</div><input class="t-num" id="th-${id}" type="number" value="0.75" min="0.2" max="2" step="0.05"></div>
+        <div class="t-dim-item"><div class="t-lbl">Top Thick</div><input class="t-num" id="tt-${id}" type="number" value="0.08" min="0.03" max="0.3" step="0.01"></div>
+      </div>
+      <!-- Style -->
+      <div class="t-lbl" style="margin-bottom:3px">Table Style</div>
+      <select class="t-sel" id="tleg-${id}">
+        <option value="4legs">4 Legs</option>
+        <option value="cube">Cube</option>
+        <option value="round">Round</option>
+      </select>
+      <!-- Table top image -->
+      <div class="t-up-zone" id="tupzone-${id}">
+        <img class="t-thumb" id="tthumb-${id}"/>
+        <input type="file" id="tfile-${id}" accept="image/png,image/jpeg">
+        <div style="font-size:16px;margin-bottom:2px;pointer-events:none">🖼</div>
+        <div style="font-size:9px;color:var(--muted);pointer-events:none">Table top image (optional)</div>
+      </div>
+      <button class="clr-btn" id="tclearimg-${id}" style="margin-bottom:8px">✕ Clear top image</button>
+      <!-- Move -->
+      <div class="ctrl-lbl">Move Position</div>
+      <div class="move-grid">
+        <div></div>
+        <button class="mv-btn" data-mv="fwd" data-tid="${id}">▲</button>
+        <div></div>
+        <button class="mv-btn" data-mv="left" data-tid="${id}">◀</button>
+        <button class="mv-btn" data-mv="reset" data-tid="${id}">⌖</button>
+        <button class="mv-btn" data-mv="right" data-tid="${id}">▶</button>
+        <div></div>
+        <button class="mv-btn" data-mv="back" data-tid="${id}">▼</button>
+        <div></div>
+      </div>
+      <!-- Rotate -->
+      <div class="ctrl-lbl" style="margin-top:6px">Rotate</div>
+      <div class="rot-row2">
+        <button class="r-btn" data-rot="-1" data-tid="${id}">↺ 15°</button>
+        <button class="r-btn" data-rot="1" data-tid="${id}">↻ 15°</button>
+      </div>
+    </div>`;
+  tblCardsEl.appendChild(card);
+
+  // Toggle card open/closed
+  card.querySelector('.tbl-card-hdr').addEventListener('click', () => card.querySelector('.tbl-card-body').style.display === 'block' ? card.querySelector('.tbl-card-body').style.display='none' : card.querySelector('.tbl-card-body').style.display='block');
+  // Start open
+  card.querySelector('.tbl-card-body').style.display = 'block';
+
+  // Visibility
+  document.getElementById('tvis-'+id).addEventListener('change', function() {
+    entry.visible = this.checked;
+    if (entry.mesh) entry.mesh.visible = this.checked;
+  });
+
+  // Delete
+  document.getElementById('tdel-'+id).addEventListener('click', () => {
+    if (entry.mesh) tableGroup.remove(entry.mesh);
+    S.tables = S.tables.filter(t => t.id !== id);
+    card.remove();
+  });
+
+  // Helper: rebuild mesh after any change
+  function rebuildEntry() {
+    refreshTblMesh(entry);
+    document.getElementById('tcardSw-'+id).style.background = entry.cfg.color;
+  }
+
+  // Color
+  const tcol = document.getElementById('tcol-'+id);
+  const thex = document.getElementById('thex-'+id);
+  const tsw  = document.getElementById('tsw-'+id);
+  tcol.addEventListener('input', e => {
+    const h = e.target.value;
+    thex.value = h.toUpperCase(); tsw.style.background = h;
+    entry.cfg.color = h; rebuildEntry();
+  });
+  thex.addEventListener('change', () => {
+    let h = thex.value.trim(); if(!h.startsWith('#')) h='#'+h;
+    if(/^#[0-9a-fA-F]{6}$/.test(h)) { tcol.value=h; tsw.style.background=h; entry.cfg.color=h; rebuildEntry(); }
+  });
+  thex.addEventListener('keydown', e => { if(e.key==='Enter') thex.dispatchEvent(new Event('change')); });
+
+  // Dimension inputs — live update debounced
+  let tTimer = null;
+  function schedTbl() {
+    clearTimeout(tTimer);
+    tTimer = setTimeout(() => {
+      entry.cfg.w     = Math.max(0.1, parseFloat(document.getElementById('tw-'+id).value)||2);
+      entry.cfg.d     = Math.max(0.1, parseFloat(document.getElementById('td-'+id).value)||1);
+      entry.cfg.h     = Math.max(0.1, parseFloat(document.getElementById('th-'+id).value)||0.75);
+      entry.cfg.thick = Math.max(0.01, parseFloat(document.getElementById('tt-'+id).value)||0.08);
+      rebuildEntry();
+    }, 300);
+  }
+  ['tw','td','th','tt'].forEach(pfx => {
+    document.getElementById(pfx+'-'+id).addEventListener('input', schedTbl);
+    document.getElementById(pfx+'-'+id).addEventListener('change', schedTbl);
+  });
+
+  // Style dropdown (4legs / cube / round)
+  document.getElementById('tleg-'+id).addEventListener('change', function() {
+    entry.cfg.legs = this.value;
+    rebuildEntry();
+  });
+
+  // Table top image upload
+  const tfile = document.getElementById('tfile-'+id);
+  const tupzone = document.getElementById('tupzone-'+id);
+  const tthumb = document.getElementById('tthumb-'+id);
+  tfile.addEventListener('change', e => loadTblImg(e.target.files[0]));
+  tupzone.addEventListener('click', e => { if(e.target!==tfile) tfile.click(); });
+  tupzone.addEventListener('dragover', e => { e.preventDefault(); tupzone.classList.add('drag'); });
+  tupzone.addEventListener('dragleave', () => tupzone.classList.remove('drag'));
+  tupzone.addEventListener('drop', e => { e.preventDefault(); tupzone.classList.remove('drag'); if(e.dataTransfer.files[0]) loadTblImg(e.dataTransfer.files[0]); });
+  function loadTblImg(file) {
+    if (!file||!file.type.match(/image\/(png|jpeg)/)) return;
+    const fr = new FileReader();
+    fr.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const tex = new THREE.Texture(img);
+        tex.needsUpdate = true;
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        entry.cfg.tex = tex;
+        entry.cfg._texDataURL = ev.target.result; // stash for Save
+        tthumb.src = ev.target.result; tthumb.classList.add('on');
+        rebuildEntry();
+      };
+      img.src = ev.target.result;
+    };
+    fr.readAsDataURL(file);
+  }
+  document.getElementById('tclearimg-'+id).addEventListener('click', () => {
+    entry.cfg.tex = null; entry.cfg._texDataURL = null; tthumb.classList.remove('on'); rebuildEntry();
+  });
+
+  // Move buttons
+  const STEP = 0.3;
+  card.querySelectorAll('.mv-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!entry.mesh) return;
+      const mv = btn.dataset.mv;
+      if      (mv==='fwd')  entry.mesh.position.z -= STEP;
+      else if (mv==='back') entry.mesh.position.z += STEP;
+      else if (mv==='left') entry.mesh.position.x -= STEP;
+      else if (mv==='right')entry.mesh.position.x += STEP;
+      else if (mv==='reset'){ entry.mesh.position.x=0; entry.mesh.position.z=0; }
+    });
+  });
+
+  // Rotate buttons
+  card.querySelectorAll('.r-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!entry.mesh) return;
+      entry.mesh.rotation.y += parseInt(btn.dataset.rot) * (Math.PI/12);
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+//  SCENE CONTROLS
+// ══════════════════════════════════════════════════════════
+document.getElementById('grid-pill').addEventListener('click', function() {
+  S.gridVisible = !S.gridVisible;
+  gridHelper.visible = S.gridVisible;
+  this.classList.toggle('on', S.gridVisible);
+  document.getElementById('grid-lbl').textContent = S.gridVisible ? 'Visible' : 'Hidden';
+});
+
+const brightSl = document.getElementById('bright-sl');
+const brightTh = document.getElementById('bright-th');
+function applyBright(v) {
+  S.brightness = v/100;
+  ambientLight.intensity = S.brightness * 0.9;
+  dirLight.intensity     = S.brightness * 1.4;
+  pointLight.intensity   = S.brightness * 0.4;
+  brightTh.style.left = v+'%';
+}
+brightSl.addEventListener('input', function() { applyBright(parseInt(this.value)); });
+
+const bgPk=document.getElementById('bg-pk'), bgSw=document.getElementById('bg-sw'), bgHex=document.getElementById('bg-hex');
+function applyBg(hex) {
+  if(!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+  S.bgColor=hex; scene.background=new THREE.Color(hex); scene.fog.color=new THREE.Color(hex);
+  bgPk.value=hex; bgSw.style.background=hex; bgHex.value=hex.toUpperCase();
+}
+bgPk.addEventListener('input', e => applyBg(e.target.value));
+bgHex.addEventListener('change', () => { let h=bgHex.value.trim(); if(!h.startsWith('#'))h='#'+h; applyBg(h); });
+bgHex.addEventListener('keydown', e => { if(e.key==='Enter') { let h=bgHex.value.trim(); if(!h.startsWith('#'))h='#'+h; applyBg(h); } });
+
+// ══════════════════════════════════════════════════════════
+//  ORBIT
+// ══════════════════════════════════════════════════════════
+const mouse = { down:false, rdown:false, lx:0, ly:0 };
+let sph = {
+  theta: Math.atan2(DC.x, DC.z),
+  phi:   Math.atan2(Math.sqrt(DC.x**2+DC.z**2), DC.y),
+  r:     Math.sqrt(DC.x**2+DC.y**2+DC.z**2)
+};
+let camT = new THREE.Vector3(0,0,0);
+
+canvas.addEventListener('mousedown', e => {
+  if(e.button===0)mouse.down=true; if(e.button===2)mouse.rdown=true;
+  mouse.lx=e.clientX; mouse.ly=e.clientY;
+});
+window.addEventListener('mouseup', () => { mouse.down=false; mouse.rdown=false; });
+window.addEventListener('mousemove', e => {
+  const dx=e.clientX-mouse.lx, dy=e.clientY-mouse.ly;
+  mouse.lx=e.clientX; mouse.ly=e.clientY;
+  if(mouse.down){ sph.theta-=dx*.008; sph.phi=Math.max(.05,Math.min(Math.PI-.05,sph.phi-dy*.008)); updCam(); }
+  if(mouse.rdown){ const r=new THREE.Vector3(); r.crossVectors(camera.getWorldDirection(new THREE.Vector3()),camera.up).normalize(); camT.addScaledVector(r,-dx*.01); camT.addScaledVector(camera.up,dy*.01); updCam(); }
+});
+canvas.addEventListener('wheel', e => {
+  sph.r=Math.max(2,Math.min(38,sph.r+e.deltaY*.02)); syncZoom(); updCam();
+}, { passive:true });
+canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+let ltd=0;
+canvas.addEventListener('touchstart', e => {
+  if(e.touches.length===1){mouse.down=true;mouse.lx=e.touches[0].clientX;mouse.ly=e.touches[0].clientY;}
+  if(e.touches.length===2)ltd=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+},{passive:true});
+canvas.addEventListener('touchend', () => { mouse.down=false; },{passive:true});
+canvas.addEventListener('touchmove', e => {
+  if(e.touches.length===1&&mouse.down){const dx=e.touches[0].clientX-mouse.lx,dy=e.touches[0].clientY-mouse.ly;mouse.lx=e.touches[0].clientX;mouse.ly=e.touches[0].clientY;sph.theta-=dx*.01;sph.phi=Math.max(.05,Math.min(Math.PI-.05,sph.phi-dy*.01));updCam();}
+  if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);sph.r=Math.max(2,Math.min(38,sph.r-(d-ltd)*.05));ltd=d;syncZoom();updCam();}
+},{passive:true});
+
+function updCam() {
+  const sp=Math.sin(sph.phi);
+  camera.position.set(camT.x+sph.r*sp*Math.sin(sph.theta), camT.y+sph.r*Math.cos(sph.phi), camT.z+sph.r*sp*Math.cos(sph.theta));
+  camera.lookAt(camT);
+}
+
+// ══════════════════════════════════════════════════════════
+//  CAMERA PRESETS — 4 angles
+// ══════════════════════════════════════════════════════════
+const CAMS = {
+  front: { theta:0,           phi:Math.PI/2, r:14 },
+  top:   { theta:0,           phi:0.05,      r:16 },
+  left:  { theta:-Math.PI/4,  phi:Math.PI/3, r:14 },
+  right: { theta:Math.PI/4,   phi:Math.PI/3, r:14 },
+};
+function setCamera(k) {
+  const p=CAMS[k]; camT.set(0,0,0);
+  sph.theta=p.theta; sph.phi=p.phi; sph.r=p.r;
+  syncZoom(); updCam();
+  document.querySelectorAll('.cam-btn').forEach(b => b.classList.toggle('active', b.dataset.cam===k));
+}
+document.querySelectorAll('.cam-btn').forEach(b => b.addEventListener('click', () => setCamera(b.dataset.cam)));
+
+function resetCam() {
+  camT.set(0,0,0);
+  sph.theta = Math.atan2(DC.x,DC.z);
+  sph.phi   = Math.atan2(Math.sqrt(DC.x**2+DC.z**2), DC.y);
+  sph.r     = Math.sqrt(DC.x**2+DC.y**2+DC.z**2);
+  document.querySelectorAll('.cam-btn').forEach(b => b.classList.remove('active'));
+  syncZoom(); updCam();
+}
+document.getElementById('reset-cam').addEventListener('click', resetCam);
+
+// ══════════════════════════════════════════════════════════
+//  ZOOM SLIDER
+// ══════════════════════════════════════════════════════════
+const zoomSl = document.getElementById('zoom-sl');
+function syncZoom() { zoomSl.value=sph.r; zoomSl.style.setProperty('--p',((sph.r-2)/36*100)+'%'); }
+zoomSl.addEventListener('input', function() { sph.r=parseFloat(this.value); updCam(); });
+syncZoom();
+
+// ══════════════════════════════════════════════════════════
+//  ROTATE
+// ══════════════════════════════════════════════════════════
+document.getElementById('rot-tog').addEventListener('click', function() {
+  S.autoRotate = !S.autoRotate;
+  this.classList.toggle('on', S.autoRotate);
+  document.getElementById('rot-lbl').textContent = S.autoRotate ? 'On' : 'Off';
+});
+document.getElementById('dir-cw').addEventListener('click', () => { S.rotDir=1; document.getElementById('dir-cw').classList.add('on'); document.getElementById('dir-ccw').classList.remove('on'); });
+document.getElementById('dir-ccw').addEventListener('click', () => { S.rotDir=-1; document.getElementById('dir-ccw').classList.add('on'); document.getElementById('dir-cw').classList.remove('on'); });
+document.getElementById('spd-grid').addEventListener('click', e => {
+  const b=e.target.closest('.spd-btn'); if(!b) return;
+  document.querySelectorAll('.spd-btn').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on');
+  S.rotSpeed = parseFloat(b.dataset.spd);
+});
+
+// ══════════════════════════════════════════════════════════
+//  SIDEBAR TOGGLE + TAB
+// ══════════════════════════════════════════════════════════
+function toggleSidebar() {
+  const app=document.getElementById('app'), btn=document.getElementById('sb-btn');
+  app.classList.toggle('off');
+  btn.textContent = app.classList.contains('off') ? '▶' : '☰';
+  setTimeout(resize, 300);
+}
+document.getElementById('sb-btn').addEventListener('click', toggleSidebar);
+window.addEventListener('keydown', e => {
+  if(e.key==='Tab') { e.preventDefault(); toggleSidebar(); }
+  if((e.key==='r'||e.key==='R') && !e.ctrlKey && !e.metaKey) resetCam();
+});
+
+// ══════════════════════════════════════════════════════════
+//  RESIZE
+// ══════════════════════════════════════════════════════════
+function resize() {
+  const { clientWidth:w, clientHeight:h } = canvas.parentElement;
+  renderer.setSize(w,h); camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+// ══════════════════════════════════════════════════════════
+//  ABOUT MODAL
+// ══════════════════════════════════════════════════════════
+const aboutModal = document.getElementById('about-modal');
+document.getElementById('about-btn').addEventListener('click', () => {
+  aboutModal.style.display = 'flex';
+});
+document.getElementById('about-close-btn').addEventListener('click', () => {
+  aboutModal.style.display = 'none';
+});
+aboutModal.addEventListener('click', e => {
+  if (e.target === aboutModal) aboutModal.style.display = 'none';
+});
+
+// ══════════════════════════════════════════════════════════
+//  EXPORT MODAL
+// ══════════════════════════════════════════════════════════
+const exportModal  = document.getElementById('export-modal');
+const modalTitle   = document.getElementById('modal-title');
+const modalDesc    = document.getElementById('modal-desc');
+const modalImg     = document.getElementById('modal-img');
+const modalDlLink  = document.getElementById('modal-dl-link');
+const modalHint    = document.getElementById('modal-hint');
+
+function closeModal() {
+  exportModal.style.display  = 'none';
+  modalImg.src               = '';
+  modalImg.style.display     = 'none';
+  modalDlLink.style.display  = 'none';
+}
+document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+exportModal.addEventListener('click', e => { if (e.target === exportModal) closeModal(); });
+
+// JPG — show image inline, user right-clicks to save
+function showJpgModal(dataURL) {
+  modalTitle.textContent     = 'Save as JPG';
+  modalDesc.textContent      = 'Right-click the image and choose "Save image as…" to save.';
+  modalImg.src               = dataURL;
+  modalImg.style.display     = 'block';
+  modalDlLink.style.display  = 'none';
+  modalHint.textContent      = '';
+  exportModal.style.display  = 'flex';
+}
+
+// Save — data: URI link, user right-clicks to save
+function showSaveModal(json, filename) {
+  const dataURI = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+  modalTitle.textContent     = 'Save Progress';
+  modalDesc.innerHTML        = 'Right-click the link below and choose:<br><b>Windows:</b> "Save link as…" &nbsp;·&nbsp; <b>Mac:</b> "Download Linked File"';
+  modalImg.style.display     = 'none';
+  modalImg.src               = '';
+  modalDlLink.href           = dataURI;
+  modalDlLink.download       = filename;
+  modalDlLink.textContent    = '⬇ ' + filename;
+  modalDlLink.style.display  = 'block';
+  modalHint.textContent      = 'Import this file anytime with Import Progress.';
+  exportModal.style.display  = 'flex';
+}
+
+// ══════════════════════════════════════════════════════════
+//  EXPORT JPG — 2x resolution
+// ══════════════════════════════════════════════════════════
+document.getElementById('exp-jpg').addEventListener('click', () => {
+  // Save current size
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  // Render at 2x
+  renderer.setSize(w * 2, h * 2);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2) * 2);
+  renderer.render(scene, camera);
+  const dataURL = renderer.domElement.toDataURL('image/jpeg', 1.0);
+  // Restore original size
+  renderer.setSize(w, h);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  showJpgModal(dataURL);
+});
+
+// ══════════════════════════════════════════════════════════
+//  SAVE PROGRESS
+// ══════════════════════════════════════════════════════════
+document.getElementById('save-btn').addEventListener('click', () => {
+  const payload = {
+    v: '1.0',
+    dims: S.dims, colors: S.colors, enabled: S.enabled,
+    texDataURLs: S._texDataURLs || {},
+    bgColor: S.bgColor, brightness: S.brightness, gridVisible: S.gridVisible,
+    tables: S.tables.map(t => ({
+      id: t.id, visible: t.visible,
+      posX: t.mesh ? t.mesh.position.x : 0,
+      posZ: t.mesh ? t.mesh.position.z : 0,
+      rotY: t.mesh ? t.mesh.rotation.y : 0,
+      cfg: { w:t.cfg.w, d:t.cfg.d, h:t.cfg.h, thick:t.cfg.thick,
+             color:t.cfg.color, legs:t.cfg.legs, texDataURL:t.cfg._texDataURL||null }
+    })),
+    tblCtr: S.tblCtr,
+  };
+  showSaveModal(JSON.stringify(payload, null, 2), `rangespace_${Date.now()}.rangespace`);
+});
+// ══════════════════════════════════════════════════════════
+//  IMPORT PROGRESS
+// ══════════════════════════════════════════════════════════
+document.getElementById('import-btn').addEventListener('click', () => {
+  document.getElementById('import-file').click();
+});
+
+document.getElementById('import-file').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file) return;
+  const fr = new FileReader();
+  fr.onload = e => {
+    try {
+      const p = JSON.parse(e.target.result);
+      // Restore dims
+      S.dims = p.dims || S.dims;
+      document.getElementById('inp-w').value = S.dims.w;
+      document.getElementById('inp-h').value = S.dims.h;
+      document.getElementById('inp-d').value = S.dims.d;
+      // Restore colors & enabled
+      if (p.colors) Object.assign(S.colors, p.colors);
+      if (p.enabled) Object.assign(S.enabled, p.enabled);
+      // Restore scene settings
+      if (p.bgColor) applyBg(p.bgColor);
+      if (p.brightness !== undefined) {
+        document.getElementById('bright-sl').value = Math.round(p.brightness * 100);
+        applyBright(Math.round(p.brightness * 100));
+      }
+      if (p.gridVisible !== undefined) {
+        S.gridVisible = p.gridVisible;
+        gridHelper.visible = S.gridVisible;
+        const gp = document.getElementById('grid-pill');
+        gp.classList.toggle('on', S.gridVisible);
+        document.getElementById('grid-lbl').textContent = S.gridVisible ? 'Visible' : 'Hidden';
+      }
+
+      // Restore wall textures from stored data URLs
+      S._texDataURLs = p.texDataURLs || {};
+      const texURLs = p.texDataURLs || {};
+      let texPending = Object.keys(texURLs).length;
+
+      function afterTextures() {
+        buildRoom();
+        // Re-sync UI colors
+        WALLS.forEach(wall => {
+          syncColor(wall.id, S.colors[wall.id]);
+          // Restore vis checkboxes
+          const visEl = document.getElementById('vis-'+wall.id);
+          if (visEl) {
+            visEl.checked = S.enabled[wall.id];
+            const item = document.getElementById('wi-'+wall.id) || visEl.closest('.wall-item');
+            if (item) item.classList.toggle('hw', !S.enabled[wall.id]);
+          }
+          // Restore thumb preview
+          if (texURLs[wall.id]) {
+            const th = document.getElementById('th-'+wall.id);
+            if (th) { th.src = texURLs[wall.id]; th.classList.add('on'); }
+            const dot = document.getElementById('dot-'+wall.id);
+            if (dot) dot.classList.add('ok');
+            document.getElementById('st-'+wall.id).textContent = 'imported';
+          }
+        });
+
+        // Restore tables
+        // Clear existing
+        S.tables.forEach(t => { if(t.mesh) tableGroup.remove(t.mesh); });
+        S.tables = [];
+        document.getElementById('tbl-cards').innerHTML = '';
+        S.tblCtr = p.tblCtr || 0;
+
+        if (p.tables) {
+          const loadTableTex = (tbl, callback) => {
+            if (!tbl.cfg.texDataURL) { callback(null); return; }
+            const img = new Image();
+            img.onload = () => {
+              const tex = new THREE.Texture(img);
+              tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+              callback(tex, tbl.cfg.texDataURL);
+            };
+            img.src = tbl.cfg.texDataURL;
+          };
+
+          let pending = p.tables.length;
+          if (pending === 0) return;
+
+          p.tables.forEach(tbl => {
+            loadTableTex(tbl, (tex, texURL) => {
+              const entry = {
+                id: tbl.id,
+                visible: tbl.visible !== false,
+                mesh: null,
+                cfg: {
+                  w: tbl.cfg.w, d: tbl.cfg.d, h: tbl.cfg.h, thick: tbl.cfg.thick,
+                  color: tbl.cfg.color, legs: tbl.cfg.legs || '4legs',
+                  tex: tex || null,
+                  _texDataURL: texURL || null,
+                }
+              };
+              refreshTblMesh(entry);
+              if (entry.mesh) {
+                entry.mesh.position.x = tbl.posX || 0;
+                entry.mesh.position.z = tbl.posZ || 0;
+                entry.mesh.rotation.y = tbl.rotY || 0;
+                entry.mesh.visible = entry.visible;
+              }
+              S.tables.push(entry);
+              createTblCard(entry);
+              // Restore leg dropdown value
+              const legSel = document.getElementById('tleg-'+entry.id);
+              if (legSel) legSel.value = entry.cfg.legs;
+              // Restore table top thumb
+              if (texURL) {
+                const tth = document.getElementById('tthumb-'+entry.id);
+                if (tth) { tth.src = texURL; tth.classList.add('on'); }
+              }
+              pending--;
+            });
+          });
+        }
+      }
+
+      if (texPending === 0) {
+        afterTextures();
+      } else {
+        let loaded = 0;
+        WALLS.forEach(wall => {
+          if (texURLs[wall.id]) {
+            const img = new Image();
+            img.onload = () => {
+              const tex = new THREE.Texture(img);
+              tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+              S.textures[wall.id] = tex;
+              loaded++;
+              if (loaded === texPending) afterTextures();
+            };
+            img.src = texURLs[wall.id];
+          }
+        });
+      }
+    } catch(err) {
+      alert('Could not import file: ' + err.message);
+    }
+  };
+  fr.readAsText(file);
+  this.value = ''; // reset so same file can be re-imported
+});
+
+// ══════════════════════════════════════════════════════════
+//  RENDER LOOP
+// ══════════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  if(S.autoRotate){ sph.theta+=clock.getDelta()*S.rotSpeed*S.rotDir; syncZoom(); updCam(); }
+  else clock.getDelta();
+  renderer.render(scene, camera);
+}
+
+// ══════════════════════════════════════════════════════════
+//  BOOT
+// ══════════════════════════════════════════════════════════
+buildRoom(); updCam(); applyBright(60); animate();
+setTimeout(() => {
+  const ls=document.getElementById('loading');
+  ls.style.transition='opacity .5s'; ls.style.opacity='0';
+  setTimeout(()=>ls.style.display='none',500);
+}, 600);
+</script>
+</body>
+</html>
